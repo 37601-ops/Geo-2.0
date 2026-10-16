@@ -1,0 +1,1278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoNav — Latitude & Longitude Interativo</title>
+  <style>
+    /* ── Reset & Base ─────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0f1117;
+      --surface:    #1a1d27;
+      --surface2:   #222638;
+      --border:     #2e3250;
+      --accent:     #4f8ef7;
+      --accent2:    #7c5bfa;
+      --equator:    #f9c74f;
+      --greenwich:  #43c6ac;
+      --north:      rgba(79,142,247,0.08);
+      --south:      rgba(124,91,250,0.08);
+      --east:       rgba(67,198,172,0.08);
+      --west:       rgba(249,199,79,0.08);
+      --green:      #22c55e;
+      --red:        #ef4444;
+      --text:       #e8eaf6;
+      --muted:      #8892b0;
+      --radius:     12px;
+      --shadow:     0 4px 24px rgba(0,0,0,.4);
+    }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── Header ───────────────────────────────────────────────── */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    .logo h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.5px; }
+    .logo span { color: var(--accent); }
+    .logo p { font-size: .7rem; color: var(--muted); margin-top: 1px; }
+
+    /* Scoreboard in header */
+    .scoreboard {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .score-card {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 14px;
+      text-align: center;
+      min-width: 70px;
+    }
+    .score-card .val {
+      font-size: 1.4rem;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .score-card .lbl { font-size: .65rem; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    .score-card.hits  .val { color: var(--green); }
+    .score-card.miss  .val { color: var(--red); }
+    .score-card.pts   .val { color: var(--accent); }
+
+    /* ── Layout ───────────────────────────────────────────────── */
+    .wrapper {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 260px 1fr;
+      gap: 0;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+    }
+
+    /* ── Sidebar ──────────────────────────────────────────────── */
+    aside {
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow-y: auto;
+      max-height: calc(100vh - 68px);
+      position: sticky;
+      top: 68px;
+    }
+
+    .section-title {
+      font-size: .7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    /* Mission box */
+    .mission-box {
+      background: linear-gradient(135deg, #1a2a4a, #1e1a3a);
+      border: 1px solid #3a4a7a;
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+    .mission-box .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--accent);
+      color: #fff;
+      font-size: .65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .8px;
+      padding: 2px 8px;
+      border-radius: 20px;
+      margin-bottom: 8px;
+    }
+    .mission-text {
+      font-size: .9rem;
+      line-height: 1.5;
+      font-weight: 600;
+      color: #fff;
+    }
+    .mission-coords {
+      margin-top: 8px;
+      font-size: 1.1rem;
+      font-weight: 800;
+      color: var(--equator);
+      letter-spacing: 1px;
+    }
+    .mission-hint {
+      margin-top: 6px;
+      font-size: .72rem;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
+    /* Feedback */
+    .feedback-box {
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      font-size: .85rem;
+      line-height: 1.45;
+      font-weight: 600;
+      transition: all .3s;
+      display: none;
+    }
+    .feedback-box.show { display: block; }
+    .feedback-box.correct {
+      background: rgba(34,197,94,.15);
+      border: 1px solid var(--green);
+      color: var(--green);
+    }
+    .feedback-box.wrong {
+      background: rgba(239,68,68,.15);
+      border: 1px solid var(--red);
+      color: var(--red);
+    }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 9px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: .82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+      width: 100%;
+    }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #fff; }
+    .btn-primary:hover { opacity: .88; transform: translateY(-1px); }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover { background: var(--surface2); }
+    .btn-teacher {
+      background: linear-gradient(135deg, #f97316, #dc2626);
+      color: #fff;
+      font-size: .78rem;
+      padding: 7px 12px;
+    }
+    .btn-teacher:hover { opacity: .88; }
+
+    /* Teacher panel */
+    .teacher-panel {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 12px;
+    }
+    .teacher-panel .section-title { color: #f97316; }
+
+    .teacher-challenge-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .challenge-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 6px;
+      text-align: center;
+      cursor: pointer;
+      transition: all .2s;
+      font-size: .72rem;
+      color: var(--text);
+      font-weight: 600;
+    }
+    .challenge-btn:hover {
+      border-color: #f97316;
+      background: rgba(249,115,22,.1);
+      color: #f97316;
+    }
+    .challenge-btn .emoji { display: block; font-size: 1.2rem; margin-bottom: 2px; }
+
+    /* Custom coords input */
+    .coord-inputs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .coord-inputs input, .coord-inputs select {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      padding: 6px 8px;
+      font-size: .78rem;
+      width: 100%;
+    }
+    .coord-inputs input:focus, .coord-inputs select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Legend */
+    .legend { display: flex; flex-direction: column; gap: 6px; }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: .75rem;
+      color: var(--muted);
+    }
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .legend-line {
+      width: 20px; height: 3px;
+      border-radius: 2px;
+      flex-shrink: 0;
+    }
+
+    /* ── Main content ─────────────────────────────────────────── */
+    main {
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      overflow: auto;
+    }
+
+    /* Info bar */
+    .info-bar {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .info-chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 12px;
+      font-size: .75rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .info-chip strong { color: var(--text); }
+
+    /* Map container */
+    .map-container {
+      position: relative;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      box-shadow: var(--shadow);
+      user-select: none;
+    }
+
+    #mapCanvas {
+      display: block;
+      width: 100%;
+      cursor: crosshair;
+    }
+
+    /* Overlay tooltip */
+    #tooltip {
+      position: fixed;
+      background: rgba(15,17,23,.95);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: .75rem;
+      color: var(--text);
+      pointer-events: none;
+      z-index: 1000;
+      display: none;
+      white-space: nowrap;
+    }
+
+    /* Flash overlay on map */
+    #mapFlash {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity .15s;
+      border-radius: var(--radius);
+    }
+
+    /* Hemisphere labels */
+    .hemisphere-labels {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    /* ── Multiple choice ──────────────────────────────────────── */
+    .choices-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .choice-btn {
+      flex: 1;
+      min-width: 140px;
+      background: var(--surface);
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      cursor: pointer;
+      font-size: .82rem;
+      color: var(--text);
+      font-weight: 600;
+      transition: all .2s;
+      text-align: center;
+    }
+    .choice-btn:hover { border-color: var(--accent); background: rgba(79,142,247,.1); }
+    .choice-btn.correct-choice { border-color: var(--green); background: rgba(34,197,94,.15); color: var(--green); }
+    .choice-btn.wrong-choice   { border-color: var(--red);   background: rgba(239,68,68,.15);  color: var(--red); }
+
+    /* ── Tabs ────────────────────────────────────────────────── */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 4px;
+      width: fit-content;
+    }
+    .tab-btn {
+      padding: 6px 16px;
+      border: none;
+      background: transparent;
+      border-radius: 7px;
+      color: var(--muted);
+      font-size: .8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* ── Theory panel ─────────────────────────────────────────── */
+    .theory-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      display: none;
+    }
+    .theory-panel.show { display: block; }
+    .theory-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .theory-card {
+      background: var(--surface2);
+      border-radius: 10px;
+      padding: 14px;
+      border-left: 3px solid var(--accent);
+    }
+    .theory-card h3 { font-size: .85rem; margin-bottom: 6px; }
+    .theory-card p  { font-size: .78rem; color: var(--muted); line-height: 1.5; }
+    .theory-card.eq { border-left-color: var(--equator); }
+    .theory-card.gw { border-left-color: var(--greenwich); }
+    .theory-card.hs { border-left-color: var(--accent2); }
+
+    /* Progress bar */
+    .progress-wrap {
+      background: var(--surface2);
+      border-radius: 20px;
+      height: 6px;
+      overflow: hidden;
+      flex: 1;
+      min-width: 80px;
+    }
+    .progress-bar {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent), var(--accent2));
+      border-radius: 20px;
+      transition: width .4s;
+    }
+
+    /* Toast notification */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(80px);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 10px 20px;
+      font-size: .85rem;
+      font-weight: 600;
+      z-index: 9999;
+      transition: transform .3s;
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    #toast.show { transform: translateX(-50%) translateY(0); }
+
+    /* Pulse animation for target marker */
+    @keyframes pulse-ring {
+      0%   { transform: translate(-50%,-50%) scale(1);   opacity: .8; }
+      100% { transform: translate(-50%,-50%) scale(2.5); opacity: 0; }
+    }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ── Responsive ───────────────────────────────────────────── */
+    @media (max-width: 900px) {
+      .wrapper { grid-template-columns: 1fr; }
+      aside {
+        max-height: none;
+        position: static;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+        flex-direction: row;
+        flex-wrap: wrap;
+        padding: 12px;
+      }
+      aside > * { flex: 1; min-width: 200px; }
+      .teacher-challenge-grid { grid-template-columns: repeat(4, 1fr); }
+    }
+    @media (max-width: 560px) {
+      header { padding: 10px; }
+      .logo h1 { font-size: 1rem; }
+      .score-card { min-width: 55px; padding: 5px 10px; }
+      .score-card .val { font-size: 1.1rem; }
+      aside > * { min-width: 100%; }
+      .teacher-challenge-grid { grid-template-columns: repeat(2, 1fr); }
+      .choices-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── HEADER ─────────────────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">🧭</div>
+    <div>
+      <h1>Geo<span>Nav</span></h1>
+      <p>Latitude &amp; Longitude Interativo</p>
+    </div>
+  </div>
+
+  <div class="scoreboard">
+    <div class="score-card hits">
+      <div class="val" id="hitsVal">0</div>
+      <div class="lbl">✅ Acertos</div>
+    </div>
+    <div class="score-card miss">
+      <div class="val" id="missVal">0</div>
+      <div class="lbl">❌ Erros</div>
+    </div>
+    <div class="score-card pts">
+      <div class="val" id="ptsVal">0</div>
+      <div class="lbl">⭐ Pontos</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+      <div class="progress-wrap" style="width:90px;">
+        <div class="progress-bar" id="progressBar" style="width:0%"></div>
+      </div>
+      <span style="font-size:.72rem;color:var(--muted);" id="progressLbl">0 / 10</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── MAIN WRAPPER ───────────────────────────────────────────────── -->
+<div class="wrapper">
+
+  <!-- ── SIDEBAR ──────────────────────────────────────────────────── -->
+  <aside>
+
+    <!-- Mission -->
+    <div>
+      <div class="section-title">🎯 Missão Atual</div>
+      <div class="mission-box" id="missionBox">
+        <div class="badge">🚢 Navegação</div>
+        <div class="mission-text" id="missionText">Carregando missão…</div>
+        <div class="mission-coords" id="missionCoords"></div>
+        <div class="mission-hint" id="missionHint"></div>
+      </div>
+    </div>
+
+    <!-- Feedback -->
+    <div class="feedback-box" id="feedbackBox"></div>
+
+    <!-- Action buttons -->
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn btn-primary" onclick="nextMission()">⏭ Próxima Missão</button>
+      <button class="btn btn-outline" onclick="resetGame()">🔄 Reiniciar Jogo</button>
+    </div>
+
+    <!-- Teacher panel -->
+    <div class="teacher-panel">
+      <div class="section-title">👩‍🏫 Painel do Professor</div>
+      <p style="font-size:.72rem;color:var(--muted);margin-bottom:10px;">Defina um desafio para toda a turma localizar:</p>
+      <div class="teacher-challenge-grid">
+        <button class="challenge-btn" onclick="setTeacherChallenge(-15.8,-47.9,'Brasil (Brasília)')">
+          <span class="emoji">🇧🇷</span>Brasil
+        </button>
+        <button class="challenge-btn" onclick="setTeacherChallenge(48.8,2.3,'França (Paris)')">
+          <span class="emoji">🇫🇷</span>França
+        </button>
+        <button class="challenge-btn" onclick="setTeacherChallenge(35.6,139.6,'Japão (Tóquio)')">
+          <span class="emoji">🇯🇵</span>Japão
+        </button>
+        <button class="challenge-btn" onclick="setTeacherChallenge(40.7,-74,'EUA (NY)')">
+          <span class="emoji">🇺🇸</span>EUA
+        </button>
+        <button class="challenge-btn" onclick="setTeacherChallenge(-33.9,18.4,'África do Sul')">
+          <span class="emoji">🇿🇦</span>África do Sul
+        </button>
+        <button class="challenge-btn" onclick="setTeacherChallenge(0,0,'Cruzamento 0°/0°')">
+          <span class="emoji">⚓</span>Origem 0°
+        </button>
+      </div>
+
+      <div style="margin-top:10px;font-size:.72rem;color:var(--muted);margin-bottom:6px;">Ou insira coordenadas personalizadas:</div>
+      <div class="coord-inputs">
+        <input type="number" id="latInput" placeholder="Lat (-90/90)" min="-90" max="90" step="0.1" />
+        <input type="number" id="lonInput" placeholder="Lon (-180/180)" min="-180" max="180" step="0.1" />
+        <select id="latDir">
+          <option value="N">Norte (N)</option>
+          <option value="S">Sul (S)</option>
+        </select>
+        <select id="lonDir">
+          <option value="E">Leste (E)</option>
+          <option value="O">Oeste (O)</option>
+        </select>
+      </div>
+      <button class="btn btn-teacher" style="margin-top:8px;" onclick="setCustomChallenge()">
+        📌 Enviar Desafio à Turma
+      </button>
+    </div>
+
+    <!-- Legend -->
+    <div>
+      <div class="section-title">🗺 Legenda</div>
+      <div class="legend">
+        <div class="legend-item">
+          <div class="legend-line" style="background:var(--equator);"></div>
+          Linha do Equador (0° Lat)
+        </div>
+        <div class="legend-item">
+          <div class="legend-line" style="background:var(--greenwich);"></div>
+          Meridiano de Greenwich (0° Lon)
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--accent);"></div>
+          Hemisfério Norte / Leste
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--accent2);"></div>
+          Hemisfério Sul / Oeste
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:#f97316;"></div>
+          🎯 Alvo do Professor
+        </div>
+        <div class="legend-item">
+          <div class="legend-dot" style="background:var(--green);"></div>
+          ✅ Clique do Aluno
+        </div>
+      </div>
+    </div>
+
+  </aside>
+
+  <!-- ── MAIN ───────────────────────────────────────────────────── -->
+  <main>
+
+    <!-- Tabs -->
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('game',this)">🎮 Jogo</button>
+        <button class="tab-btn" onclick="switchTab('theory',this)">📖 Teoria</button>
+      </div>
+      <div class="info-bar">
+        <div class="info-chip">🖱 <strong>Clique no mapa</strong> para marcar coordenada</div>
+        <div class="info-chip" id="cursorChip">📍 —</div>
+      </div>
+    </div>
+
+    <!-- Map -->
+    <div class="map-container" id="mapContainer">
+      <canvas id="mapCanvas"></canvas>
+      <div id="mapFlash"></div>
+    </div>
+
+    <!-- Multiple choice -->
+    <div id="choicesSection">
+      <div style="font-size:.75rem;color:var(--muted);margin-bottom:8px;">💡 Ou escolha o hemisfério correto:</div>
+      <div class="choices-row" id="choicesRow"></div>
+    </div>
+
+    <!-- Theory panel -->
+    <div class="theory-panel" id="theoryPanel">
+      <h2 style="font-size:1rem;margin-bottom:4px;">📖 Guia Rápido: Latitude &amp; Longitude</h2>
+      <p style="font-size:.8rem;color:var(--muted);">Conceitos fundamentais para a navegação geográfica.</p>
+      <div class="theory-grid">
+        <div class="theory-card eq">
+          <h3>🌐 Linha do Equador</h3>
+          <p>É o paralelo 0°. Divide a Terra em Hemisfério <strong>Norte</strong> (latitudes positivas, até +90°) e <strong>Sul</strong> (latitudes negativas, até -90°).</p>
+        </div>
+        <div class="theory-card gw">
+          <h3>🕰 Meridiano de Greenwich</h3>
+          <p>É o meridiano 0°. Divide a Terra em Hemisfério <strong>Leste</strong> (longitudes positivas, até +180°) e <strong>Oeste</strong> (longitudes negativas, até -180°).</p>
+        </div>
+        <div class="theory-card hs">
+          <h3>🧭 Latitude</h3>
+          <p>Mede o afastamento Norte/Sul em relação ao Equador. Paralelos horizontais de <strong>-90° (Sul) a +90° (Norte)</strong>.</p>
+        </div>
+        <div class="theory-card">
+          <h3>📐 Longitude</h3>
+          <p>Mede o afastamento Leste/Oeste em relação a Greenwich. Meridianos verticais de <strong>-180° (Oeste) a +180° (Leste)</strong>.</p>
+        </div>
+        <div class="theory-card eq">
+          <h3>🗺 Os 4 Hemisférios</h3>
+          <p><strong>NO</strong> = Norte + Oeste (EUA, México)<br/>
+             <strong>NL</strong> = Norte + Leste (Europa, Ásia)<br/>
+             <strong>SO</strong> = Sul + Oeste (Brasil, Argentina)<br/>
+             <strong>SL</strong> = Sul + Leste (Austrália, Sul da África)</p>
+        </div>
+        <div class="theory-card gw">
+          <h3>✍ Como ler coordenadas</h3>
+          <p>Sempre <strong>Latitude primeiro</strong>, depois Longitude.<br/>
+             Ex: <em>15° S, 47° O</em> = 15° abaixo do Equador e 47° a Oeste de Greenwich.</p>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Tooltip -->
+<div id="tooltip"></div>
+
+<!-- Toast -->
+<div id="toast"></div>
+
+<!-- ── JAVASCRIPT ─────────────────────────────────────────────────── -->
+<script>
+'use strict';
+
+/* ── State ───────────────────────────────────────────────────────── */
+const state = {
+  hits: 0, miss: 0, pts: 0,
+  round: 0, total: 10,
+  currentTarget: null,   // { lat, lon, label }
+  teacherTarget: null,   // teacher override
+  playerMarker: null,    // { lat, lon }
+  answered: false,
+  tolerance: 12,         // degrees tolerance for map click
+  canvas: null, ctx: null,
+  mapImage: null,        // background world map image
+};
+
+/* ── Missions pool ───────────────────────────────────────────────── */
+const MISSIONS = [
+  { lat: 45,  lon: 90,   label: '45° N, 90° L',   text: 'Encontre o ponto 45° ao Norte do Equador e 90° a Leste de Greenwich.', hemisphere: 'Norte-Leste' },
+  { lat: -30, lon: -60,  label: '30° S, 60° O',   text: 'Navegue até 30° ao Sul do Equador e 60° a Oeste de Greenwich.', hemisphere: 'Sul-Oeste' },
+  { lat: 60,  lon: -90,  label: '60° N, 90° O',   text: 'Siga para 60° ao Norte e 90° a Oeste — região do Canadá!', hemisphere: 'Norte-Oeste' },
+  { lat: -45, lon: 135,  label: '45° S, 135° L',  text: 'Localize 45° ao Sul e 135° a Leste — próximo à Austrália!', hemisphere: 'Sul-Leste' },
+  { lat: 0,   lon: 0,    label: '0°, 0°',          text: 'Encontre a interseção exata do Equador com Greenwich!', hemisphere: 'Exatamente no centro' },
+  { lat: 20,  lon: 45,   label: '20° N, 45° L',   text: 'Navegue até 20° Norte e 45° a Leste — Península Arábica!', hemisphere: 'Norte-Leste' },
+  { lat: -15, lon: -75,  label: '15° S, 75° O',   text: 'Localize 15° ao Sul e 75° a Oeste — dentro do Brasil/Peru!', hemisphere: 'Sul-Oeste' },
+  { lat: 35,  lon: -5,   label: '35° N, 5° O',    text: 'Navegue até 35° Norte e 5° Oeste — quase em Gibraltar!', hemisphere: 'Norte-Oeste' },
+  { lat: -60, lon: 60,   label: '60° S, 60° L',   text: 'Arrisque-se até 60° ao Sul e 60° a Leste — Oceano Índico!', hemisphere: 'Sul-Leste' },
+  { lat: 75,  lon: -120, label: '75° N, 120° O',  text: 'Extremo Norte! 75° N e 120° Oeste — Ártico Canadense!', hemisphere: 'Norte-Oeste' },
+  { lat: -5,  lon: -35,  label: '5° S, 35° O',    text: 'Missão Brasil! 5° ao Sul e 35° a Oeste — Nordeste brasileiro!', hemisphere: 'Sul-Oeste' },
+  { lat: 51,  lon: 0,    label: '51° N, 0°',      text: 'Em cima de Greenwich! 51° Norte e exatamente 0° de longitude!', hemisphere: 'Norte (no meridiano)' },
+];
+
+/* ── Teacher challenges ──────────────────────────────────────────── */
+function setTeacherChallenge(lat, lon, label) {
+  state.teacherTarget = { lat, lon, label };
+  state.currentTarget = { lat, lon, label };
+  state.playerMarker = null;
+  state.answered = false;
+  hideFeedback();
+
+  document.getElementById('missionBox').querySelector('.badge').textContent = '👩‍🏫 Desafio do Professor';
+  document.getElementById('missionText').textContent = `Localizar: ${label}`;
+  document.getElementById('missionCoords').textContent = `${Math.abs(lat)}° ${lat>=0?'N':'S'}, ${Math.abs(lon)}° ${lon>=0?'L':'O'}`;
+  document.getElementById('missionHint').textContent = `Clique no mapa ou escolha o hemisfério correto!`;
+
+  buildChoices(lat, lon);
+  drawMap();
+  showToast(`📌 Professor definiu: ${label}`);
+}
+
+function setCustomChallenge() {
+  const latVal = parseFloat(document.getElementById('latInput').value);
+  const lonVal = parseFloat(document.getElementById('lonInput').value);
+  const latDir = document.getElementById('latDir').value;
+  const lonDir = document.getElementById('lonDir').value;
+
+  if (isNaN(latVal) || isNaN(lonVal)) {
+    showToast('⚠️ Insira valores válidos de coordenadas!'); return;
+  }
+  if (latVal < 0 || latVal > 90) { showToast('⚠️ Latitude deve ser entre 0 e 90!'); return; }
+  if (lonVal < 0 || lonVal > 180) { showToast('⚠️ Longitude deve ser entre 0 e 180!'); return; }
+
+  const lat = latDir === 'S' ? -latVal : latVal;
+  const lon = lonDir === 'O' ? -lonVal : lonVal;
+  const label = `${latVal}° ${latDir}, ${lonVal}° ${lonDir}`;
+  setTeacherChallenge(lat, lon, label);
+}
+
+/* ── Game logic ──────────────────────────────────────────────────── */
+function nextMission() {
+  if (state.round >= state.total) { showToast('🏆 Jogo completo! Reinicie para jogar novamente.'); return; }
+
+  const shuffled = [...MISSIONS].sort(() => Math.random() - 0.5);
+  const m = shuffled[state.round % shuffled.length];
+
+  state.teacherTarget = null;
+  state.currentTarget = { lat: m.lat, lon: m.lon, label: m.label };
+  state.playerMarker = null;
+  state.answered = false;
+  hideFeedback();
+
+  document.getElementById('missionBox').querySelector('.badge').textContent = `🚢 Missão ${state.round + 1} / ${state.total}`;
+  document.getElementById('missionText').textContent = m.text;
+  document.getElementById('missionCoords').textContent = m.label;
+  document.getElementById('missionHint').textContent = `Dica: está no hemisfério ${m.hemisphere}.`;
+
+  buildChoices(m.lat, m.lon);
+  drawMap();
+  updateProgress();
+}
+
+function resetGame() {
+  state.hits = 0; state.miss = 0; state.pts = 0; state.round = 0;
+  state.currentTarget = null; state.playerMarker = null; state.answered = false;
+  state.teacherTarget = null;
+  updateScore();
+  updateProgress();
+  hideFeedback();
+  nextMission();
+  showToast('🔄 Jogo reiniciado!');
+}
+
+function updateScore() {
+  document.getElementById('hitsVal').textContent = state.hits;
+  document.getElementById('missVal').textContent = state.miss;
+  document.getElementById('ptsVal').textContent  = state.pts;
+}
+
+function updateProgress() {
+  const pct = (state.round / state.total) * 100;
+  document.getElementById('progressBar').style.width = pct + '%';
+  document.getElementById('progressLbl').textContent = `${state.round} / ${state.total}`;
+}
+
+/* ── Build multiple-choice buttons ──────────────────────────────── */
+function buildChoices(lat, lon) {
+  const correctHemisphere = getHemisphere(lat, lon);
+  const allChoices = [
+    { label: 'Hemisfério Norte-Leste (N / L)', check: (la, lo) => la >= 0 && lo >= 0 },
+    { label: 'Hemisfério Norte-Oeste (N / O)', check: (la, lo) => la >= 0 && lo < 0  },
+    { label: 'Hemisfério Sul-Leste (S / L)',   check: (la, lo) => la < 0  && lo >= 0 },
+    { label: 'Hemisfério Sul-Oeste (S / O)',   check: (la, lo) => la < 0  && lo < 0  },
+  ];
+
+  const row = document.getElementById('choicesRow');
+  row.innerHTML = '';
+  allChoices.forEach(c => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.textContent = c.label;
+    const isCorrect = c.check(lat, lon);
+    btn.onclick = () => {
+      if (state.answered) return;
+      handleChoiceAnswer(isCorrect, btn, row);
+    };
+    row.appendChild(btn);
+  });
+}
+
+function getHemisphere(lat, lon) {
+  const ns = lat >= 0 ? 'Norte' : 'Sul';
+  const eo = lon >= 0 ? 'Leste' : 'Oeste';
+  return `${ns}-${eo}`;
+}
+
+function handleChoiceAnswer(isCorrect, btn, row) {
+  state.answered = true;
+  if (isCorrect) {
+    btn.classList.add('correct-choice');
+    recordHit();
+  } else {
+    btn.classList.add('wrong-choice');
+    // highlight correct
+    Array.from(row.children).forEach(b => {
+      const text = b.textContent;
+      const tgt = state.currentTarget;
+      const ns = tgt.lat >= 0 ? 'Norte' : 'Sul';
+      const eo = tgt.lon >= 0 ? 'Leste' : 'Oeste';
+      if (text.includes(ns) && text.includes(eo)) b.classList.add('correct-choice');
+    });
+    recordMiss();
+  }
+  drawMap();
+}
+
+function recordHit() {
+  state.hits++;
+  state.pts += 100;
+  state.round++;
+  updateScore();
+  flashMap('rgba(34,197,94,0.25)');
+  showFeedback(true, '🎉 Correto! Muito bem!');
+  if (state.round >= state.total) setTimeout(() => showToast('🏆 Parabéns! Você completou todas as missões!'), 800);
+}
+
+function recordMiss() {
+  state.miss++;
+  state.pts = Math.max(0, state.pts - 20);
+  state.round++;
+  updateScore();
+  flashMap('rgba(239,68,68,0.25)');
+  const tgt = state.currentTarget;
+  const ns = tgt.lat >= 0 ? 'Norte (acima do Equador)' : 'Sul (abaixo do Equador)';
+  const eo = tgt.lon >= 0 ? 'Leste (direita de Greenwich)' : 'Oeste (esquerda de Greenwich)';
+  showFeedback(false, `❌ Errou! O ponto está no hemisfério ${getHemisphere(tgt.lat,tgt.lon)}.\n→ Lat ${ns}\n→ Lon ${eo}`);
+}
+
+/* ── Feedback ────────────────────────────────────────────────────── */
+function showFeedback(correct, msg) {
+  const box = document.getElementById('feedbackBox');
+  box.className = 'feedback-box show ' + (correct ? 'correct' : 'wrong');
+  box.innerHTML = msg.replace(/\n/g, '<br>');
+}
+function hideFeedback() {
+  const box = document.getElementById('feedbackBox');
+  box.className = 'feedback-box';
+}
+
+/* ── Flash map ───────────────────────────────────────────────────── */
+function flashMap(color) {
+  const fl = document.getElementById('mapFlash');
+  fl.style.background = color;
+  fl.style.opacity = '1';
+  setTimeout(() => { fl.style.opacity = '0'; }, 350);
+}
+
+/* ── Toast ───────────────────────────────────────────────────────── */
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+/* ── Tabs ────────────────────────────────────────────────────────── */
+function switchTab(tab, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const gameEls = ['mapContainer','choicesSection'];
+  if (tab === 'game') {
+    gameEls.forEach(id => document.getElementById(id).style.display = '');
+    document.getElementById('theoryPanel').classList.remove('show');
+  } else {
+    gameEls.forEach(id => document.getElementById(id).style.display = 'none');
+    document.getElementById('theoryPanel').classList.add('show');
+  }
+}
+
+/* ── Canvas MAP ──────────────────────────────────────────────────── */
+function initCanvas() {
+  const canvas = document.getElementById('mapCanvas');
+  state.canvas = canvas;
+  state.ctx = canvas.getContext('2d');
+
+  /* Pre-load the world map image */
+  const img = new Image();
+  img.src = 'world-map.png';
+  img.onload = () => {
+    state.mapImage = img;
+    drawMap();
+  };
+  img.onerror = () => {
+    /* Fallback: draw without image if file not found */
+    state.mapImage = null;
+    drawMap();
+  };
+
+  resizeCanvas();
+  window.addEventListener('resize', () => { resizeCanvas(); drawMap(); });
+  canvas.addEventListener('mousemove', onMouseMove);
+  canvas.addEventListener('mouseleave', () => { document.getElementById('tooltip').style.display = 'none'; });
+  canvas.addEventListener('click', onMapClick);
+}
+
+function resizeCanvas() {
+  const container = document.getElementById('mapContainer');
+  const w = container.clientWidth;
+  const h = Math.max(320, Math.min(w * 0.55, 520));
+  state.canvas.width  = w;
+  state.canvas.height = h;
+  state.canvas.style.height = h + 'px';
+}
+
+/* Convert lat/lon to canvas x/y */
+function latLonToXY(lat, lon) {
+  const c = state.canvas;
+  const PAD = 40;
+  const x = PAD + ((lon + 180) / 360) * (c.width - PAD * 2);
+  const y = PAD + ((90 - lat) / 180) * (c.height - PAD * 2);
+  return { x, y };
+}
+/* Convert canvas x/y to lat/lon */
+function xyToLatLon(x, y) {
+  const c = state.canvas;
+  const PAD = 40;
+  const lon = ((x - PAD) / (c.width - PAD * 2)) * 360 - 180;
+  const lat = 90 - ((y - PAD) / (c.height - PAD * 2)) * 180;
+  return { lat: Math.max(-90, Math.min(90, lat)), lon: Math.max(-180, Math.min(180, lon)) };
+}
+
+function drawMap() {
+  const canvas = state.canvas;
+  const ctx    = state.ctx;
+  if (!canvas || !ctx) return;
+  const W = canvas.width, H = canvas.height;
+  const PAD = 40;
+
+  ctx.clearRect(0, 0, W, H);
+
+  /* ── Dark border area outside the map ── */
+  ctx.fillStyle = '#0d1320';
+  ctx.fillRect(0, 0, W, H);
+
+  /* ── World map image (or fallback gradient) ── */
+  if (state.mapImage) {
+    /* Draw image precisely inside the padded map area */
+    ctx.drawImage(state.mapImage, PAD, PAD, W - PAD * 2, H - PAD * 2);
+  } else {
+    /* Fallback gradient if image fails */
+    const ocean = ctx.createLinearGradient(0, 0, 0, H);
+    ocean.addColorStop(0, '#0f2248');
+    ocean.addColorStop(1, '#1a0c35');
+    ctx.fillStyle = ocean;
+    ctx.fillRect(PAD, PAD, W - PAD * 2, H - PAD * 2);
+  }
+
+  /* ── Hemisphere tint overlays (semi-transparent over the map) ── */
+  const cx = latLonToXY(0, 0);
+  // NW
+  ctx.fillStyle = 'rgba(79,142,247,0.10)';
+  ctx.fillRect(PAD, PAD, cx.x - PAD, cx.y - PAD);
+  // NE
+  ctx.fillStyle = 'rgba(67,198,172,0.10)';
+  ctx.fillRect(cx.x, PAD, W - PAD - cx.x, cx.y - PAD);
+  // SW
+  ctx.fillStyle = 'rgba(124,91,250,0.10)';
+  ctx.fillRect(PAD, cx.y, cx.x - PAD, H - PAD - cx.y);
+  // SE
+  ctx.fillStyle = 'rgba(249,199,79,0.10)';
+  ctx.fillRect(cx.x, cx.y, W - PAD - cx.x, H - PAD - cx.y);
+
+  /* ── Grid lines ── */
+  ctx.lineWidth = .8;
+  ctx.strokeStyle = 'rgba(255,255,255,0.20)';
+  // lat lines
+  for (let lat = -90; lat <= 90; lat += 15) {
+    if (lat === 0) continue;
+    const p = latLonToXY(lat, -180);
+    ctx.beginPath(); ctx.moveTo(PAD, p.y); ctx.lineTo(W-PAD, p.y); ctx.stroke();
+  }
+  // lon lines
+  for (let lon = -180; lon <= 180; lon += 15) {
+    if (lon === 0) continue;
+    const p = latLonToXY(0, lon);
+    ctx.beginPath(); ctx.moveTo(p.x, PAD); ctx.lineTo(p.x, H-PAD); ctx.stroke();
+  }
+
+  /* ── Tropic / polar lines ── */
+  ctx.setLineDash([5,4]);
+  ctx.strokeStyle = 'rgba(255,220,80,0.45)';
+  ctx.lineWidth = 1.2;
+  [23.5, -23.5, 66.5, -66.5].forEach(lat => {
+    const p = latLonToXY(lat, 0);
+    ctx.beginPath(); ctx.moveTo(PAD, p.y); ctx.lineTo(W-PAD, p.y); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+
+
+  /* ── EQUATOR ── */
+  const eq = latLonToXY(0, 0);
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#f9c74f';
+  ctx.shadowColor  = '#f9c74f';
+  ctx.shadowBlur   = 6;
+  ctx.beginPath(); ctx.moveTo(PAD, eq.y); ctx.lineTo(W-PAD, eq.y); ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  /* ── GREENWICH ── */
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = '#43c6ac';
+  ctx.shadowColor  = '#43c6ac';
+  ctx.shadowBlur   = 6;
+  ctx.beginPath(); ctx.moveTo(eq.x, PAD); ctx.lineTo(eq.x, H-PAD); ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  /* ── Axis labels ── */
+  ctx.font = 'bold 9px "Segoe UI", sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#f9c74f';
+  ctx.fillText('Equador 0°', eq.x - 50, eq.y - 6);
+
+  ctx.fillStyle = '#43c6ac';
+  ctx.textAlign = 'left';
+  ctx.fillText('Greenwich 0°', eq.x + 5, PAD + 14);
+
+  /* ── Hemisphere labels ── */
+  ctx.font = 'bold 11px "Segoe UI", sans-serif';
+  ctx.globalAlpha = .35;
+
+  ctx.fillStyle = '#4f8ef7'; ctx.textAlign = 'center';
+  ctx.fillText('N / O', PAD + (cx.x-PAD)/2, PAD + (cx.y-PAD)/2 + 4);
+  ctx.fillStyle = '#43c6ac';
+  ctx.fillText('N / L', cx.x + (W-PAD-cx.x)/2, PAD + (cx.y-PAD)/2 + 4);
+  ctx.fillStyle = '#7c5bfa';
+  ctx.fillText('S / O', PAD + (cx.x-PAD)/2, cx.y + (H-PAD-cx.y)/2 + 4);
+  ctx.fillStyle = '#f9c74f';
+  ctx.fillText('S / L', cx.x + (W-PAD-cx.x)/2, cx.y + (H-PAD-cx.y)/2 + 4);
+  ctx.globalAlpha = 1;
+
+  /* ── Tick labels (lat/lon axis) ── */
+  ctx.font = 'bold 9px "Segoe UI", sans-serif';
+  ctx.shadowColor = 'rgba(0,0,0,0.9)';
+  ctx.shadowBlur  = 4;
+  ctx.fillStyle = 'rgba(200,210,230,0.9)';
+
+  // Latitude labels (left side)
+  ctx.textAlign = 'right';
+  for (let lat = -90; lat <= 90; lat += 30) {
+    const p = latLonToXY(lat, -180);
+    const lbl = lat === 0 ? '0°' : (lat > 0 ? `${lat}°N` : `${Math.abs(lat)}°S`);
+    ctx.fillText(lbl, PAD - 4, p.y + 3);
+  }
+  // Longitude labels (bottom)
+  ctx.textAlign = 'center';
+  for (let lon = -180; lon <= 180; lon += 30) {
+    const p = latLonToXY(0, lon);
+    const lbl = lon === 0 ? '0°' : (lon > 0 ? `${lon}°L` : `${Math.abs(lon)}°O`);
+    ctx.fillText(lbl, p.x, H - PAD + 14);
+  }
+  ctx.shadowBlur = 0;
+
+  /* ── Teacher target ── */
+  if (state.teacherTarget) {
+    const tp = latLonToXY(state.teacherTarget.lat, state.teacherTarget.lon);
+    drawPulseTarget(ctx, tp.x, tp.y, '#f97316', 14, true);
+  }
+
+  /* ── Mission target (show after answering) ── */
+  if (state.answered && state.currentTarget) {
+    const tp = latLonToXY(state.currentTarget.lat, state.currentTarget.lon);
+    drawPulseTarget(ctx, tp.x, tp.y, '#22c55e', 10, false);
+    ctx.font = 'bold 10px "Segoe UI", sans-serif';
+    ctx.fillStyle = '#22c55e';
+    ctx.textAlign = 'left';
+    const lbl = state.currentTarget.label;
+    ctx.fillText(`✓ ${lbl}`, tp.x + 12, tp.y - 4);
+  }
+
+  /* ── Player marker ── */
+  if (state.playerMarker) {
+    const pp = latLonToXY(state.playerMarker.lat, state.playerMarker.lon);
+    ctx.beginPath();
+    ctx.arc(pp.x, pp.y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = state.answered
+      ? (isClose(state.playerMarker, state.currentTarget) ? '#22c55e' : '#ef4444')
+      : '#4f8ef7';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = '#fff';
+    ctx.stroke();
+  }
+
+  /* ── Border ── */
+  ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(PAD, PAD, W-PAD*2, H-PAD*2);
+}
+
+function drawPulseTarget(ctx, x, y, color, r, large) {
+  // Outer ring
+  ctx.beginPath();
+  ctx.arc(x, y, large ? r*2 : r*1.6, 0, Math.PI*2);
+  ctx.strokeStyle = color + '55';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  // Inner
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI*2);
+  ctx.fillStyle = color + 'aa';
+  ctx.fill();
+  ctx.lineWidth = 2.5;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  // Cross
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(x-r,y); ctx.lineTo(x+r,y); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(x,y-r); ctx.lineTo(x,y+r); ctx.stroke();
+}
+
+function isClose(a, b) {
+  if (!a || !b) return false;
+  return Math.abs(a.lat - b.lat) <= state.tolerance && Math.abs(a.lon - b.lon) <= state.tolerance * 2;
+}
+
+/* ── Map interaction ─────────────────────────────────────────────── */
+function onMouseMove(e) {
+  const rect = state.canvas.getBoundingClientRect();
+  const scaleX = state.canvas.width  / rect.width;
+  const scaleY = state.canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top)  * scaleY;
+  const { lat, lon } = xyToLatLon(x, y);
+
+  const ns = lat >= 0 ? 'N' : 'S';
+  const eo = lon >= 0 ? 'L' : 'O';
+  const tip = document.getElementById('tooltip');
+  tip.innerHTML = `📍 ${Math.abs(lat).toFixed(1)}° ${ns},  ${Math.abs(lon).toFixed(1)}° ${eo}`;
+  tip.style.display = 'block';
+  tip.style.left = (e.clientX + 14) + 'px';
+  tip.style.top  = (e.clientY - 28) + 'px';
+
+  document.getElementById('cursorChip').innerHTML = `📍 <strong>${Math.abs(lat).toFixed(1)}° ${ns}</strong>, <strong>${Math.abs(lon).toFixed(1)}° ${eo}</strong>`;
+}
+
+function onMapClick(e) {
+  if (state.answered) return;
+  if (!state.currentTarget) return;
+
+  const rect = state.canvas.getBoundingClientRect();
+  const scaleX = state.canvas.width  / rect.width;
+  const scaleY = state.canvas.height / rect.height;
+  const x = (e.clientX - rect.left) * scaleX;
+  const y = (e.clientY - rect.top)  * scaleY;
+  const { lat, lon } = xyToLatLon(x, y);
+
+  state.playerMarker = { lat, lon };
+  state.answered = true;
+
+  const correct = isClose({ lat, lon }, state.currentTarget);
+  if (correct) {
+    recordHit();
+  } else {
+    // Compute directional hint
+    const tgt = state.currentTarget;
+    let dirs = [];
+    if (tgt.lat > lat + state.tolerance) dirs.push('mais ao NORTE ↑');
+    else if (tgt.lat < lat - state.tolerance) dirs.push('mais ao SUL ↓');
+    if (tgt.lon > lon + state.tolerance*2) dirs.push('mais a LESTE →');
+    else if (tgt.lon < lon - state.tolerance*2) dirs.push('mais a OESTE ←');
+    const hint = dirs.length ? `Dica de direção: ${dirs.join(' e ')}.` : 'Quase! Tente ser mais preciso.';
+    state.miss++;
+    state.pts = Math.max(0, state.pts - 20);
+    state.round++;
+    updateScore();
+    flashMap('rgba(239,68,68,0.25)');
+    showFeedback(false, `❌ Errou! ${hint}\nA resposta certa era: ${tgt.label}`);
+    if (state.round >= state.total) setTimeout(() => showToast('Fim de jogo! Reinicie para tentar novamente.'), 800);
+  }
+
+  // Highlight correct choices too
+  Array.from(document.getElementById('choicesRow').children).forEach(b => {
+    const tgt = state.currentTarget;
+    const ns = tgt.lat >= 0 ? 'Norte' : 'Sul';
+    const eo = tgt.lon >= 0 ? 'Leste' : 'Oeste';
+    if (b.textContent.includes(ns) && b.textContent.includes(eo)) b.classList.add('correct-choice');
+  });
+
+  drawMap();
+  updateProgress();
+}
+
+/* ── Init ────────────────────────────────────────────────────────── */
+window.addEventListener('load', () => {
+  initCanvas();
+  drawMap();
+  nextMission();
+});
+</script>
+</body>
+</html>
